@@ -42,4 +42,7 @@ class Recorder:
             else:
                 self.keyboard_item = self.scanner.get_item_path()
         else:
-            self.keyboard_buffer += uiatools.convert_keyboard_keys(keys)
+            self.keyboard_buffer += uiatools.kb_keys_hook_to_uia(keys)
+
+    def get_current_item_path(self):
+        return self.scanner.get_item_path()

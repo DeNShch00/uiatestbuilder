@@ -5,30 +5,29 @@ import threading
 
 from comtypes import COMError
 from pywinauto.base_wrapper import BaseWrapper
+from typing import Optional
 
 
 class ItemPathRecord:
-    def __init__(self, item: BaseWrapper, identical_items_index=None, skip=False):
+    def __init__(self, item: BaseWrapper, identical_items_index=None):
         self.auto_id = item.element_info.automation_id
         self.title = item.element_info.name
         self.control_type = item.element_info.control_type
         self.control_id = item.element_info.control_id
         self.class_name = item.element_info.class_name
         self.identical_items_index = identical_items_index
-        self.skip = skip
 
     def __repr__(self):
         return str(self.__dict__)
 
 
 class ItemPath:
-    def __init__(self, item: BaseWrapper):
+    def __init__(self, item: Optional[BaseWrapper] = None):
         self.path = []
         while item:
             # TODO: get_identical_items_index() is very slow, must do it faster
             # self.path.append(ItemPathRecord(item, self._get_identical_items_index(item)))
-            skip = not item.element_info.name and item.element_info.control_type in ('Pane', 'TitleBar')
-            self.path.append(ItemPathRecord(item, skip=skip))
+            self.path.append(ItemPathRecord(item))
             item = item.parent()
 
         self.path.reverse()
@@ -70,7 +69,7 @@ class ItemPath:
 class Scanner:
     def __init__(self):
         self.initial_item = pywinauto.Desktop(backend='uia')
-        self.current_path = None
+        self.current_path = ItemPath()
         self.cur_item_rect = None
         self.is_scanning = False
         self.scanning_thread = None
@@ -86,16 +85,8 @@ class Scanner:
     def stop(self):
         if self.scanning_thread:
             self.is_scanning = False
-            self.scanning_thread.join()
+            self.scanning_thread.join(timeout=5)
             self.scanning_thread = None
-
-    def _item_from_mouse_pos(self):
-        for i in range(10):
-            x, y = pyautogui.position()
-            try:
-                return self.initial_item.from_point(x, y)
-            except (COMError, KeyError):
-                time.sleep(0.1)
 
     def _is_same_item(self, item):
         rect = item.rectangle()
@@ -109,42 +100,30 @@ class Scanner:
         count = 0
         highlight = 'red'
         while self.is_scanning:
-            item = self._item_from_mouse_pos()
-            if self._is_same_item(item):
-                count += 1
-            else:
-                count = 0
-                highlight = 'red'
+            try:
+                item = self.initial_item.from_point(*pyautogui.position())
+                if self._is_same_item(item):
+                    count += 1
+                else:
+                    count = 0
+                    highlight = 'red'
 
-            if count == 3:
-                print('on..', time.process_time())
-                self.current_path = ItemPath(item)
-                print(self.current_path, time.process_time())
-                highlight = 'green'
-                count += 1
+                if count == 3:
+                    self.current_path = ItemPath(item)
+                    highlight = 'green'
+                    count += 1
 
-            item.draw_outline(colour=highlight, thickness=2)
+                item.draw_outline(colour=highlight, thickness=2)
+            except (COMError, KeyError):
+                self.current_path = ItemPath()
+
             time.sleep(0.2)
 
     def get_item_path(self) -> ItemPath:
-        # return ItemPath(self._item_from_mouse_pos())
         return self.current_path
 
 
-def convert_keyboard_keys(hook_keys):
-
-    # key_map = {
-    #     'lshift': '{VK_LSHIFT}',
-    #     'rshift': '{VK_RSHIFT}',
-    #     'lcontrol':'{VK_LCONTROL}',
-    #     'rcontrol': '{VK_RCONTROL}',
-    #     'lmenu': '{VK_LMENU}',
-    #     'rmenu': '{VK_RMENU}',
-    #     'back': '{{VK_BACK}',
-    #     'return': '{VK_RETURN}',
-    #     'tab': '{VK_TAB}',
-    # }
-
+def kb_keys_hook_to_uia(hook_keys):
     virtual_keys = ('back', 'return', 'tab')
     modifiers = ('lshift', 'rshift', 'lcontrol', 'rcontrol', 'lmenu', 'rmenu')
     additional_keys = ''

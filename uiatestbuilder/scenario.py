@@ -26,7 +26,7 @@ class ItemAction(Action):
         code = f'# {self.id}\n'
         code += 'item = desktop\n'
         for record in self.item_path.path[1:]:
-            code += f"{'# ' if record.skip else ''}item = item.window(" \
+            code += f"item = item.window(" \
                 f"auto_id=r'{record.auto_id}', " \
                 f"title=r'{record.title}', " \
                 f"control_type='{record.control_type}', " \

@@ -1,4 +1,5 @@
 import subprocess
+import importlib
 from typing import Iterable
 
 import jsonpickle
@@ -28,9 +29,18 @@ def run_steps(steps: Iterable[scenario.Step]):
     sc = scenario.Scenario()
     sc.steps = steps
     file = 'hohohho.py'
-    interpreter = r'C:\Program Files\Python37\python.exe'
     build(sc, file)
-    return _run_cmd(interpreter + ' ' + file)
+    try:
+        module = importlib.import_module(file.replace('.py', ''))
+        module.main()
+    except:
+        pass
+
+    return 0, '', ''
+
+    # interpreter = r'C:\Program Files\Python37\python.exe'
+    # build(sc, file)
+    # return _run_cmd(interpreter + ' ' + file)
 
 
 def _run_cmd(cmd):

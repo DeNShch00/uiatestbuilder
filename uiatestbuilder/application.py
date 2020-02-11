@@ -23,9 +23,16 @@ class Application:
         self.main_wnd.title('Pywinauto test generator')
 
         box = tkinter.Frame(self.main_wnd)
-        box.pack()
-        self.action_list = tkinter.Listbox(box, selectmode=tkinter.SINGLE)
-        self.action_list.pack()
+        box.pack(fill=tkinter.BOTH, expand=1)
+
+        frame = tkinter.Frame(box)
+        frame.pack(fill=tkinter.X, expand=1)
+        scrollbar = tkinter.Scrollbar(frame)
+        scrollbar.pack(side=tkinter.RIGHT, fill=tkinter.Y)
+        self.action_list = tkinter.Listbox(frame, selectmode=tkinter.SINGLE, yscrollcommand=scrollbar.set)
+        self.action_list.pack(fill=tkinter.X, expand=1)
+        scrollbar.config(command=self.action_list.yview)
+
         self.record_btn = tkinter.Button(box, text='Start', command=self.on_start_record)
         self.record_btn.pack()
         btn = tkinter.Button(box, text='New', command=self.on_new_scenario)
@@ -46,14 +53,22 @@ class Application:
         btn = tkinter.Button(box, text='Save', command=self.on_save_scenario)
         btn.pack()
         self.active_on_stop_group.append(btn)
-        self.status_area = tkinter.Text(box)
-        self.status_area.pack()
+
+        frame = tkinter.Frame(box)
+        frame.pack(fill=tkinter.X, expand=1)
+        scrollbar = tkinter.Scrollbar(frame)
+        scrollbar.pack(side=tkinter.RIGHT, fill=tkinter.Y)
+        self.status_area = tkinter.Text(frame, wrap=tkinter.WORD, yscrollcommand=scrollbar.set)
+        self.status_area.pack(fill=tkinter.X, expand=1)
+        scrollbar.config(command=self.status_area.yview)
 
     def add_status(self, text):
         self.status_area.insert(tkinter.END, text + '\n')
+        self.status_area.see(tkinter.END)
 
     def new_scenario_set(self):
         self.action_list.delete(0, tkinter.END)
+        self.status_area.delete(1.0, tkinter.END)
         self.step_counter = 1
 
     def on_new_scenario(self):
@@ -139,6 +154,7 @@ class Application:
 
     def action_list_add_step(self, step):
         self.action_list.insert(tkinter.END, step.name)
+        self.action_list.see(tkinter.END)
 
     def on_add_action(self, action):
         self.current_step.actions.append(action)
@@ -146,11 +162,22 @@ class Application:
         self.action_list_current_insert_index += 1
 
     def action_list_add_action(self, index, action):
-        text = '    ' + str(action.item_path)
+        if isinstance(action, scenario.ClickAction):
+            text = f"click {action.mouse_button}{' double' if action.double_click else ''} "
+            text += str(action.item_path)
+        elif isinstance(action, scenario.KeyboardAction):
+            text = f'keyboard "{action.keys}" {str(action.item_path)}'
+        else:
+            text = 'unknown action ' + str(type(action))
+
+        text = '    ' + text
         self.action_list.insert(index, text)
+        self.action_list.see(index)
 
     def get_action_loop(self):
         if self.is_recording:
+            self.add_status(str(self.rec.get_current_item_path()))
+
             try:
                 action = self.rec.action_queue.get_nowait()
             except queue.Empty:
