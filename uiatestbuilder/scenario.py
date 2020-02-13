@@ -3,7 +3,6 @@ import random
 import uiatools
 
 
-
 def _generate_id():
     return random.randint(1, 10**10)
 
@@ -26,12 +25,7 @@ class ItemAction(Action):
         code = f'# {self.id}\n'
         code += 'item = desktop\n'
         for record in self.item_path.path[1:]:
-            code += f"item = item.window(" \
-                f"auto_id=r'{record.auto_id}', " \
-                f"title=r'{record.title}', " \
-                f"control_type='{record.control_type}', " \
-                f"control_id={record.control_id}, " \
-                f"found_index={record.identical_items_index})\n"
+            code += f"item = item.window({record.to_search_str()})\n"
 
         return code
 

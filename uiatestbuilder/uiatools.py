@@ -9,16 +9,86 @@ from typing import Optional
 
 
 class ItemPathRecord:
-    def __init__(self, item: BaseWrapper, identical_items_index=None):
-        self.auto_id = item.element_info.automation_id
-        self.title = item.element_info.name
-        self.control_type = item.element_info.control_type
-        self.control_id = item.element_info.control_id
-        self.class_name = item.element_info.class_name
-        self.identical_items_index = identical_items_index
+    class InvalidString(Exception):
+        pass
 
-    def __repr__(self):
-        return str(self.__dict__)
+    def __init__(self, item: BaseWrapper, identical_items_index=None):
+        self.props = {
+            '-class_name': item.element_info.class_name,
+            '-class_name_re': None,
+            '-process': item.element_info.process_id,
+            'title': item.element_info.name,
+            '-title_re': None,
+            '-top_level_only': True,
+            '-visible_only': item.element_info.visible,
+            '-enabled_only': item.element_info.enabled,
+            '-best_match': None,
+            '-handle': item.element_info.handle,
+            '-ctrl_index': None,
+            '-found_index': identical_items_index,
+            '-active_only': False,
+            'control_id': item.element_info.control_id,
+            'control_type': item.element_info.control_type,
+            'auto_id': item.element_info.automation_id,
+            '-framework_id': item.element_info.framework_id,
+            '-backend': None,
+            '-depth': None
+        }
+
+        # t = time.process_time()
+        # self.auto_id = item.element_info.automation_id
+        # self.title = item.element_info.name
+        # self.control_type = item.element_info.control_type
+        # self.control_id = item.element_info.control_id
+        # self.class_name = item.element_info.class_name
+        # self.identical_items_index = identical_items_index
+        # print(item.element_info.handle)
+        # print(item.element_info.framework_id)
+        # print(item.element_info.rich_text)
+        # print(item.element_info.runtime_id)
+        # print('t1 ', time.process_time() - t, end=' ')
+        # # t = item.element_info.element
+        # # print(t)
+        # # print(type(t))
+        # # print(t.__dict__)
+        # # print(item.get_properties())
+        # # print(item.writable_props)
+        #
+        # t = time.process_time()
+        # self.p = item.get_properties()
+        # print('t2 ', time.process_time() - t)
+        #
+        # # y = pywinauto.Desktop(backend='uia')
+        # # y = y.window(title='ff')
+        # # y.print_control_identifiers()
+
+    def __getitem__(self, key):
+        return self.props.get(key, self.props['-' + key])
+
+    def to_str(self):
+        return str(self.props)
+
+    def from_str(self, string):
+        try:
+            self.props = eval('{' + string + '}')
+        except Exception:
+            raise self.InvalidString
+
+    def to_search_str(self, include_empty_props=False):
+        pairs = []
+        for key, value in self.props.items():
+            if not key.startswith('-'):
+                if not include_empty_props and (value is None or value == ''):
+                    continue
+
+                prefix, postfix = ("r'", "'") if isinstance(value, str) else ('', '')
+                pairs.append(f'{key}={prefix}{value}{postfix}')
+
+        return ', '.join(pairs)
+
+
+    # def __repr__(self):
+    #     return str(self.__dict__)
 
 
 class ItemPath:
@@ -56,10 +126,12 @@ class ItemPath:
     def __str__(self):
         res = ''
         for record in self.path:
-            if record.title:
-                res += f'[{record.title.strip()[:20]}]'
-            elif record.control_type:
-                res += f'[{record.control_type}]'
+            title = record['title']
+            type = record['control_type']
+            if title:
+                res += f'[{title[:20]}]'
+            elif type:
+                res += f'[{type}]'
             else:
                 res += '[]'
 
