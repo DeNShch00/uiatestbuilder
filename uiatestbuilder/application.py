@@ -7,6 +7,7 @@ from tkinter.filedialog import askopenfilename, asksaveasfilename
 import scenario
 import recorder
 import scenariotools
+import uiatools
 
 
 class Application:
@@ -38,7 +39,7 @@ class Application:
         btn = tkinter.Button(box, text='New', command=self.on_new_scenario)
         btn.pack()
         self.active_on_stop_group.append(btn)
-        btn = tkinter.Button(box, text='Add Step',  command=self.on_add_step)
+        btn = tkinter.Button(box, text='Add Step...',  command=self.on_add_step)
         btn.pack()
         self.active_on_stop_group.append(btn)
         btn = tkinter.Button(box, text='Delete', command=self.on_del_action)
@@ -47,10 +48,13 @@ class Application:
         btn = tkinter.Button(box, text='Run', command=self.on_run_step)
         btn.pack()
         self.active_on_stop_group.append(btn)
-        btn = tkinter.Button(box, text='Load', command=self.on_load_scenario)
+        btn = tkinter.Button(box, text='Load...', command=self.on_load_scenario)
         btn.pack()
         self.active_on_stop_group.append(btn)
-        btn = tkinter.Button(box, text='Save', command=self.on_save_scenario)
+        btn = tkinter.Button(box, text='Save...', command=self.on_save_scenario)
+        btn.pack()
+        self.active_on_stop_group.append(btn)
+        btn = tkinter.Button(box, text='Tune...', command=self.on_tune_item_path)
         btn.pack()
         self.active_on_stop_group.append(btn)
 
@@ -101,8 +105,8 @@ class Application:
         index, step, action = self.get_selected_step_action()
         if step and not action:
             self.add_status('Run step: ' + step.name)
-            code, out, err = scenariotools.run_steps((step,))
-            self.add_status('\n'.join((str(code), out, err)))
+            exception = scenariotools.run_steps((step,))
+            self.add_status(exception)
         else:
             self.add_status('No step selected')
 
@@ -147,10 +151,19 @@ class Application:
                 self.add_status('No step selected')
 
     def on_add_step(self):
-        step = scenario.Step(f'Step {self.step_counter}')
-        self.sc.steps.append(step)
-        self.action_list_add_step(step)
-        self.step_counter += 1
+        dlg = StepNameDlg(self.step_counter)
+        if dlg.show() == 'OK':
+            step = scenario.Step(dlg.step_name)
+            self.sc.steps.append(step)
+            self.action_list_add_step(step)
+            self.step_counter += 1
+
+    def on_tune_item_path(self):
+        index, step, action = self.get_selected_step_action()
+        if action and  isinstance(action, scenario.ItemAction):
+            TuneItemPathDlg(action.item_path).show()
+        else:
+            self.add_status('No action on item selected')
 
     def action_list_add_step(self, step):
         self.action_list.insert(tkinter.END, step.name)
@@ -232,3 +245,87 @@ class Application:
 
     def run(self):
         self.main_wnd.mainloop()
+
+
+class ModalDialog:
+    def __init__(self):
+        self.dialog = tkinter.Toplevel()
+        self.result = None
+
+    def show(self):
+        self.dialog.focus_set()
+        self.dialog.grab_set()
+        self.dialog.wait_window()
+        return self.result
+
+
+class OkCancelModalDialog(ModalDialog):
+    def __init__(self, ):
+        super().__init__()
+        self.body_frame = tkinter.Frame(self.dialog)
+        self.body_frame.pack(fill=tkinter.BOTH, expand=1)
+        self.footer_frame = tkinter.Frame(self.dialog)
+        self.footer_frame.pack(fill=tkinter.Y, expand=1)
+        self.ok_btn = tkinter.Button(self.footer_frame, text='OK', command=self.on_ok)
+        self.ok_btn.pack()
+        self.cancel_btn = tkinter.Button(self.footer_frame, text='Cancel', command=self.on_cancel)
+        self.cancel_btn.pack()
+        self.result = 'Cancel'
+
+    def on_ok(self):
+        self.result = 'OK'
+        self.dialog.destroy()
+
+    def on_cancel(self):
+        self.result = 'Cancel'
+        self.dialog.destroy()
+
+
+class StepNameDlg(OkCancelModalDialog):
+    def __init__(self, step_counter):
+        super().__init__()
+        self.step_name = f'Step {step_counter}'
+        self.name_entry = tkinter.Entry(self.body_frame)
+        self.name_entry.pack(fill=tkinter.X, expand=1)
+        self.name_entry.insert(0, self.step_name)
+        self.name_entry.bind('<FocusIn>', self.on_name_enty_focus)
+
+    def on_name_enty_focus(self, event):
+        self.name_entry.selection_range(0, tkinter.END)
+
+    def on_ok(self):
+        if not self.name_entry.get():
+            return
+
+        self.step_name = self.name_entry.get()
+        super().on_ok()
+
+
+class TuneItemPathDlg(OkCancelModalDialog):
+    def __init__(self, path: uiatools.ItemPath):
+        super().__init__()
+        self.path = path
+        self.text_ateas = []
+        for record in path.path:
+            box = tkinter.Frame(self.body_frame)
+            box.pack(fill=tkinter.X, expand=1)
+            tkinter.Label(box, text=f'[{record.friendly_name()}]').pack()
+            scrollbar = tkinter.Scrollbar(box)
+            scrollbar.pack(side=tkinter.RIGHT, fill=tkinter.Y)
+            area = tkinter.Text(box, height=5, wrap=tkinter.WORD, yscrollcommand=scrollbar.set)
+            area.pack(fill=tkinter.X, expand=1)
+            scrollbar.config(command=area.yview)
+            area.insert(0.0, record.to_enum_str())
+            self.text_ateas.append(area)
+
+        tkinter.Label(self.body_frame, text='Remove "-" to enable path property.').pack()
+
+    def on_ok(self):
+        try:
+            for i, record in enumerate(self.path.path):
+                record.from_enum_str(self.text_ateas[i].get(0.0, tkinter.END))
+        except uiatools.ItemPathRecord.InvalidEnumStr as exc:
+            tkinter.messagebox.showerror(message=str(exc))
+            return
+
+        super().on_ok()

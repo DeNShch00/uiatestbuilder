@@ -50,7 +50,7 @@ class KeyboardAction(ItemAction):
 
     def code_gen(self):
         code = super().code_gen()
-        code += f"item.type_keys(keys=r'{self.keys}')\n"
+        code += f"item.type_keys(keys=r'{self.keys}', pause=1)\n"
         return code
 
 

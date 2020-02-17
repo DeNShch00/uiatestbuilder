@@ -1,5 +1,6 @@
-import subprocess
+import sys
 import importlib
+import traceback
 from typing import Iterable
 
 import jsonpickle
@@ -28,23 +29,20 @@ def build(sc: scenario.Scenario, file_path):
 def run_steps(steps: Iterable[scenario.Step]):
     sc = scenario.Scenario()
     sc.steps = steps
-    file = 'hohohho.py'
-    build(sc, file)
+    module_file = 'hohohho.py'
+    build(sc, module_file)
     try:
-        module = importlib.import_module(file.replace('.py', ''))
+        module_name = module_file.replace('.py', '')
+        if module_name in sys.modules:
+            module = importlib.reload(sys.modules[module_name])
+        else:
+            module = importlib.import_module(module_name)
+
         module.main()
     except:
+        return traceback.format_exc()
         pass
 
-    return 0, '', ''
+    return ''
 
-    # interpreter = r'C:\Program Files\Python37\python.exe'
-    # build(sc, file)
-    # return _run_cmd(interpreter + ' ' + file)
-
-
-def _run_cmd(cmd):
-    process = subprocess.Popen(cmd, universal_newlines=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    stdout, stderr = process.communicate()
-    return process.returncode, stdout, stderr
 

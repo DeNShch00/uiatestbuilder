@@ -9,7 +9,7 @@ from typing import Optional
 
 
 class ItemPathRecord:
-    class InvalidString(Exception):
+    class InvalidEnumStr(Exception):
         pass
 
     def __init__(self, item: BaseWrapper, identical_items_index=None):
@@ -35,60 +35,68 @@ class ItemPathRecord:
             '-depth': None
         }
 
-        # t = time.process_time()
-        # self.auto_id = item.element_info.automation_id
-        # self.title = item.element_info.name
-        # self.control_type = item.element_info.control_type
-        # self.control_id = item.element_info.control_id
-        # self.class_name = item.element_info.class_name
-        # self.identical_items_index = identical_items_index
-        # print(item.element_info.handle)
-        # print(item.element_info.framework_id)
-        # print(item.element_info.rich_text)
-        # print(item.element_info.runtime_id)
-        # print('t1 ', time.process_time() - t, end=' ')
-        # # t = item.element_info.element
-        # # print(t)
-        # # print(type(t))
-        # # print(t.__dict__)
-        # # print(item.get_properties())
-        # # print(item.writable_props)
-        #
-        # t = time.process_time()
-        # self.p = item.get_properties()
-        # print('t2 ', time.process_time() - t)
-        #
-        # # y = pywinauto.Desktop(backend='uia')
-        # # y = y.window(title='ff')
-        # # y.print_control_identifiers()
-
     def __getitem__(self, key):
-        return self.props.get(key, self.props['-' + key])
-
-    def to_str(self):
-        return str(self.props)
-
-    def from_str(self, string):
         try:
-            self.props = eval('{' + string + '}')
-        except Exception:
-            raise self.InvalidString
+            return self.props[key]
+        except KeyError:
+            pass
+
+        return self.props['-' + key]
+
+    def to_enum_str(self):
+        return '\n'.join([f'{k}={v}' for k, v in self._items(False, True, True)])
 
     def to_search_str(self, include_empty_props=False):
-        pairs = []
+        return ', '.join([f'{k}={v}' for k, v in self._items(True, False, include_empty_props)])
+
+    def _items(self, raw_str: bool, include_disabled: bool, include_empty: bool):
         for key, value in self.props.items():
-            if not key.startswith('-'):
-                if not include_empty_props and (value is None or value == ''):
-                    continue
+            if include_disabled or not key.startswith('-'):
+                if include_empty or (value is not None and value != ''):
+                    if isinstance(value, str):
+                        yield key, '{}"{}"'.format('r' if raw_str else '', value)
+                    else:
+                        yield key, str(value)
 
-                prefix, postfix = ("r'", "'") if isinstance(value, str) else ('', '')
-                pairs.append(f'{key}={prefix}{value}{postfix}')
+    def from_enum_str(self, enum):
+        props = {}
+        for line in enum.splitlines():
+            pair = line.split('=', 1)
+            if len(pair) != 2:
+                raise self.InvalidEnumStr(f'[{self.friendly_name()}], invalid record: [{line}]')
 
-        return ', '.join(pairs)
+            key, value = pair
+            key = key.strip()
+            value = value.strip()
 
+            disabled = key.startswith('-')
+            origin_key = key.strip('-')  # for case: '---key'
+            try:
+                self[origin_key]
+            except KeyError:
+                raise self.InvalidEnumStr(f'[{self.friendly_name()}], invalid key: [{key}]')
 
-    # def __repr__(self):
-    #     return str(self.__dict__)
+            key = origin_key if not disabled else '-' + origin_key
+            try:
+                if value == 'None':
+                    props[key] = None
+                elif value == 'False':
+                    props[key] = False
+                elif value == 'True':
+                    props[key] = True
+                elif value[0].isdigit():
+                    props[key] = int(value)
+                else:
+                    props[key] = value.strip('"')
+            except (IndexError, ValueError):
+                raise self.InvalidEnumStr(f'[{self.friendly_name()}], invalid value: [{value}] for key [{key}]')
+
+        self.props = props
+
+    def friendly_name(self):
+        title = self['title']
+        type = self['control_type']
+        return title[:20] if title else type
 
 
 class ItemPath:
@@ -124,18 +132,7 @@ class ItemPath:
         assert False
 
     def __str__(self):
-        res = ''
-        for record in self.path:
-            title = record['title']
-            type = record['control_type']
-            if title:
-                res += f'[{title[:20]}]'
-            elif type:
-                res += f'[{type}]'
-            else:
-                res += '[]'
-
-        return res
+        return ''.join([f'[{x.friendly_name()}]' for x in self.path])
 
 
 class Scanner:
