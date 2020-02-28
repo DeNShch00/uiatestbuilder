@@ -4,6 +4,8 @@ import traceback
 from typing import Iterable
 
 import jsonpickle
+import pywinauto
+from pywinauto.findwindows import ElementAmbiguousError, ElementNotFoundError
 
 import scenario
 
@@ -21,16 +23,16 @@ def load(file_path) -> scenario.Scenario:
     return jsonpickle.decode(serialize_str)
 
 
-def build(sc: scenario.Scenario, file_path):
+def build(sc: scenario.Scenario, file_path, debug=False):
     with open(file_path, 'w', encoding='utf-8') as file:
-        file.write(sc.code_gen())
+        file.write(sc.code_gen(debug))
 
 
 def run_steps(steps: Iterable[scenario.Step]):
     sc = scenario.Scenario()
     sc.steps = steps
     module_file = 'hohohho.py'
-    build(sc, module_file)
+    build(sc, module_file, debug=True)
     try:
         module_name = module_file.replace('.py', '')
         if module_name in sys.modules:
@@ -39,10 +41,17 @@ def run_steps(steps: Iterable[scenario.Step]):
             module = importlib.import_module(module_name)
 
         module.main()
+    except (ElementAmbiguousError, ElementNotFoundError) as exc:
+        exc_type = 'ElementAmbiguousError' if isinstance(exc, ElementAmbiguousError) else 'ElementNotFoundError'
+        for step in steps:
+            for action in step.actions:
+                if isinstance(action, scenario.ItemAction):
+                    for record in action.item_path.path:
+                        if record.id == exc.path_id:
+                            return exc_type, (step, action, record)
+
+        assert False
     except:
-        return traceback.format_exc()
-        pass
+        return 'OtherError', traceback.format_exc()
 
-    return ''
-
-
+    return None, None

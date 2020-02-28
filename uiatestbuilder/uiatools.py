@@ -1,11 +1,14 @@
-import pywinauto
-import pyautogui
 import time
 import threading
+
+import pywinauto
+import pyautogui
 
 from comtypes import COMError
 from pywinauto.base_wrapper import BaseWrapper
 from typing import Optional
+
+import tools
 
 
 class ItemPathRecord:
@@ -13,6 +16,7 @@ class ItemPathRecord:
         pass
 
     def __init__(self, item: BaseWrapper, identical_items_index=None):
+        self.id = tools.generate_id()
         self.props = {
             '-class_name': item.element_info.class_name,
             '-class_name_re': None,

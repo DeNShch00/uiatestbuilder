@@ -105,8 +105,28 @@ class Application:
         index, step, action = self.get_selected_step_action()
         if step and not action:
             self.add_status('Run step: ' + step.name)
-            exception = scenariotools.run_steps((step,))
-            self.add_status(exception)
+            exception_type, exception_data = scenariotools.run_steps((step,))
+            if exception_type == 'ElementAmbiguousError' or exception_type == 'ElementNotFoundError':
+                step, action, record = exception_data
+                if exception_type == 'ElementNotFoundError':
+                    problem = 'not found'
+                    recommendation = 'Press "Tune" and (1) specify another "found_index" for parent item or ' \
+                                     '(2) try enable\\disable item properties or ' \
+                                     '(3) set timeout to wait until item is visible'
+                else:
+                    problem = 'has duplicates'
+                    recommendation = 'Press "Tune" and specify "found_index" ' \
+                                     'or other property to distinguish right item.'
+
+                self.add_status(f'Item "{record.friendly_name()}" {problem} '
+                                f'(item_id "{record.id}", step {self.sc.steps.index(step) + 1} "{step.name}", '
+                                f'action {step.actions.index(action) + 1} "{self.action_to_str(action)}"). '
+                                f'{recommendation}')
+
+            elif exception_type == 'OtherError':
+                self.add_status(exception_data)
+            else:
+                self.add_status('Success')
         else:
             self.add_status('No step selected')
 
@@ -174,7 +194,8 @@ class Application:
         self.action_list_add_action(self.action_list_current_insert_index, action)
         self.action_list_current_insert_index += 1
 
-    def action_list_add_action(self, index, action):
+    @staticmethod
+    def action_to_str(action):
         if isinstance(action, scenario.ClickAction):
             text = f"click {action.mouse_button}{' double' if action.double_click else ''} "
             text += str(action.item_path)
@@ -183,7 +204,10 @@ class Application:
         else:
             text = 'unknown action ' + str(type(action))
 
-        text = '    ' + text
+        return text
+
+    def action_list_add_action(self, index, action):
+        text = '    ' + self.action_to_str(action)
         self.action_list.insert(index, text)
         self.action_list.see(index)
 
@@ -309,7 +333,7 @@ class TuneItemPathDlg(OkCancelModalDialog):
         for record in path.path:
             box = tkinter.Frame(self.body_frame)
             box.pack(fill=tkinter.X, expand=1)
-            tkinter.Label(box, text=f'[{record.friendly_name()}]').pack()
+            tkinter.Label(box, text=f'{record.friendly_name()}, id: {record.id}').pack()
             scrollbar = tkinter.Scrollbar(box)
             scrollbar.pack(side=tkinter.RIGHT, fill=tkinter.Y)
             area = tkinter.Text(box, height=5, wrap=tkinter.WORD, yscrollcommand=scrollbar.set)
